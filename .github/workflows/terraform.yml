@@ -1,5 +1,9 @@
 name: Terraform Plan and Apply (per-environment)
 
+permissions:
+  contents: read
+  id-token: write
+
 on:
   push:
     branches:
@@ -17,6 +21,7 @@ jobs:
   plan:
     name: Plan - ${{ matrix.env }}
     runs-on: ubuntu-latest
+    environment: ${{ matrix.environment_name }}
     strategy:
       matrix:
         include:
@@ -32,6 +37,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -84,6 +95,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
