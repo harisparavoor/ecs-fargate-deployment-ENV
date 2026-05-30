@@ -1,16 +1,31 @@
-name: Terraform Plan and Apply
+name: Terraform Plan and Apply (per-environment)
 
 on:
   pull_request:
   push:
     branches:
+      - dev
+      - staging
       - main
   workflow_dispatch:
 
 jobs:
   plan:
-    name: Terraform Plan
+    name: Plan - ${{ matrix.env }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - env: dev
+            path: infrastructure/environments/dev
+            environment_name: dev
+          - env: staging
+            path: infrastructure/environments/staging
+            environment_name: staging
+          - env: prod
+            path: infrastructure/environments/prod
+            environment_name: production
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,28 +37,47 @@ jobs:
 
       - name: Terraform fmt
         run: terraform fmt -check
+        working-directory: ${{ matrix.path }}
 
       - name: Terraform init
         run: terraform init -input=false
+        working-directory: ${{ matrix.path }}
 
       - name: Terraform validate
         run: terraform validate
+        working-directory: ${{ matrix.path }}
 
       - name: Terraform plan
         run: terraform plan -input=false -out=tfplan
+        working-directory: ${{ matrix.path }}
 
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan
-          path: tfplan
+          name: tfplan-${{ matrix.env }}
+          path: ${{ matrix.path }}/tfplan
 
   apply:
-    name: Terraform Apply
+    name: Apply - ${{ matrix.env }}
     runs-on: ubuntu-latest
     needs: plan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    strategy:
+      matrix:
+        include:
+          - env: dev
+            path: infrastructure/environments/dev
+            branch: refs/heads/dev
+            environment_name: dev
+          - env: staging
+            path: infrastructure/environments/staging
+            branch: refs/heads/staging
+            environment_name: staging
+          - env: prod
+            path: infrastructure/environments/prod
+            branch: refs/heads/main
+            environment_name: production
+    if: ${{ github.event_name == 'push' && github.ref == matrix.branch }}
+    environment: ${{ matrix.environment_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,7 +90,12 @@ jobs:
       - name: Download plan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ matrix.env }}
+
+      - name: Terraform init
+        run: terraform init -input=false
+        working-directory: ${{ matrix.path }}
 
       - name: Terraform apply
         run: terraform apply -input=false tfplan
+        working-directory: ${{ matrix.path }}
